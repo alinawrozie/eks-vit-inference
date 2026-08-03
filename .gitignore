@@ -1,0 +1,5 @@
+#Testing Weights
+*.pt
+*.jpg
+local-weights/*.pt
+
