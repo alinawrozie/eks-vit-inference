@@ -6,7 +6,7 @@ from PIL import Image
 from model import build_model, get_inference_transform
 
 # Read environment variables with sensible defaults
-CHECKPOINT_PATH = os.getenv("CHECKPOINT_PATH", "/app/model-fold-5.pt")
+CHECKPOINT_PATH = os.getenv("CHECKPOINT_PATH", "/weights/model-fold-5.pt")
 THRESHOLD_RAW = os.getenv("THRESHOLD", "0.75")
 PARSED_THRESHOLD = float(THRESHOLD_RAW)
 
