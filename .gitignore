@@ -1,6 +1,10 @@
+#Terraform
+**/.terraform/*
 #Testing Weights
 *.pt
 *.jpg
 local-weights/*.pt
 decisions.txt
+
+
 
