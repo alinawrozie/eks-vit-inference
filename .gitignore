@@ -2,4 +2,5 @@
 *.pt
 *.jpg
 local-weights/*.pt
+decisions.txt
 
