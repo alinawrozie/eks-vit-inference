@@ -8,10 +8,10 @@ terraform {
     }
   }
   backend "s3" {
-    bucket = "eks-vit-inference-tfstate-lock"
-    key    = "eks-vit-inference/terraform.tfstate"
-    region = "eu-west-2"
-    encrypt = true
+    bucket       = "eks-vit-inference-tfstate-lock"
+    key          = "eks-vit-inference/terraform.tfstate"
+    region       = "eu-west-2"
+    encrypt      = true
     use_lockfile = true
   }
 }
