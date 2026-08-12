@@ -8,8 +8,10 @@ module "eks" {
   vpc_id     = module.vpc.vpc_id
   subnet_ids = module.vpc.private_subnets
 
+  #Creates an IAM identity provider. it says:
+  #AWS, accept identity tokens signed by this EKS cluster.
   enable_irsa = true
-
+  
   cluster_endpoint_public_access  = true
   cluster_endpoint_private_access = true
 
