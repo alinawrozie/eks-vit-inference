@@ -1,6 +1,5 @@
 #Creating bucket for model weights
 
-
 data "aws_caller_identity" "current" {}
 
 resource "aws_s3_bucket" "model_bucket" {
