@@ -4,6 +4,9 @@
 *.pt
 *.jpg
 local-weights/*.pt
+
+k8s/generated/*
+
 decisions.txt
 
 
