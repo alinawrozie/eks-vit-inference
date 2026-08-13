@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: irsa-test
+  namespace: vit-models
+spec:
+  serviceAccountName: vit-melanoma-sa
+  containers:
+    - name: irsa-test
+      image: amazon/aws-cli:2.15.0
+      command: ["sleep", "3600"]
