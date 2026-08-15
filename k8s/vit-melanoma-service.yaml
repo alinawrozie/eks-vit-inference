@@ -1,0 +1,14 @@
+# Create a service to expose the deployment
+apiVersion: v1
+kind: Service
+metadata:
+  name: vit-melanoma-service
+  namespace: vit-models
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 8080
+      targetPort: 8080
+      protocol: TCP
+  selector:
+    app: vit-melanoma
