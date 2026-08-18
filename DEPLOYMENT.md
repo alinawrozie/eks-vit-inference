@@ -1,12 +1,12 @@
 # Deployment runbook — eks-vit-inference
 
-This reflects the actual order this project was built and verified in, not a speculative plan. Steps 0–4 are complete and were genuinely executed as written below. Steps 5 onward are the plan for what comes next — update this file as each is actually completed, so it never drifts back into being aspirational rather than real.
+This reflects the actual order this project was built and verified in, not a speculative plan. Every command below, Steps 0–5, was genuinely executed and verified as written. **The project concluded at Step 5** — melanoma deployed, reachable via `kubectl port-forward`, verified with a real prediction. Steps 6–9 and a second model were deliberately not built; see the "Project conclusion" section at the end for why.
 
 Placeholders used throughout: `<ACCOUNT_ID>`, `<TFSTATE_BUCKET>`, `<WEIGHTS_BUCKET>` (resolves to `${cluster_name}-weights-<ACCOUNT_ID>`), `<ECR_MELANOMA_URL>`. Commands are PowerShell-oriented where syntax differs from bash (backtick line continuation, `curl.exe`, `${PWD}`).
 
 ## Step 0 — Scope
 
-No commands. Decisions made and held throughout: single best checkpoint per model (not the 5-fold ensemble), melanoma built as one complete vertical slice before keratosis, checkpoint filename and decision threshold (0.75) read from environment variables rather than hardcoded, two independent services rather than one shared endpoint.
+No commands. Decisions made and held throughout: single best checkpoint per model (not the 5-fold ensemble), checkpoint filename and decision threshold (0.75) read from environment variables rather than hardcoded, two independent services designed for rather than one shared endpoint (though only melanoma was ultimately built — see the conclusion at the end of this file).
 
 ## Step 1 — Local containerization
 
@@ -171,7 +171,7 @@ kubectl get pods -n vit-models -w
 ```
 Both replicas reached `1/1 Ready` within ~20 seconds — init container fetched the checkpoint via IRSA, main container passed its `/health` readiness check.
 
-**Proof, without waiting for Step 6's ALB:**
+**Final proof — the project's actual finish line, verified without an ALB (Step 6 was not built; `port-forward` was the last mile for this project's scope):**
 ```
 kubectl port-forward -n vit-models svc/vit-melanoma-svc 8080:80
 ```
@@ -180,13 +180,19 @@ curl.exe -X POST -F "file=@test-images/test.jpg" http://localhost:8080/predict
 ```
 Result: `{"probability":0.5621392726898193,"label":0}` — bit-for-bit identical to the first local prediction from Step 1, confirming the checkpoint fetched via IRSA is byte-identical to the local copy and nothing in the container/EKS/IRSA chain introduced drift.
 
-## Steps 6–9 (not started)
+## Steps 6–9 — out of scope, not built
 
-Ingress/ALB, HPA, CI/CD, and observability — to be filled in here as each is actually built, following the same "what was really run" standard as the sections above.
+ALB Ingress, Horizontal Pod Autoscaler, CI/CD, and observability were all planned and partially designed (see this repo's chat history for the ALB controller/Ingress reasoning specifically) but never implemented. This was a deliberate scope decision, not a stopping point reached by running out of time or hitting a blocker — Step 5 already proves everything this project set out to prove.
 
 ## Tearing down
 
 ```
 terraform destroy
 ```
-Deletes everything, including the S3 bucket's contents (`force_destroy`) and the Terraform-generated ServiceAccount YAML. Nothing here is stateful or irreplaceable — the checkpoint's source of truth is `local-weights/`, everything else rebuilds from `.tf` files. Re-running Step 4's upload and Step 3's `update-kubeconfig` are the two things every fresh `apply` requires again before continuing.
+Deletes everything, including the S3 bucket's contents (`force_destroy`) and the Terraform-generated ServiceAccount YAML. Nothing here is stateful or irreplaceable — the checkpoint's source of truth is `local-weights/`, everything else rebuilds from `.tf` files.
+
+## Project conclusion
+
+Final verified state: a raw image, sent to a pod running in Amazon EKS, returns a real prediction — `{"probability":0.5621392726898193,"label":0}`, bit-for-bit identical to the very first local test in Step 1. Zero static AWS credentials anywhere in the system; a least-privilege IAM boundary that was proven to actually hold, not just configured; infrastructure that tears down and rebuilds cleanly from code alone. That's the goal this project was scoped around, and it's met.
+
+If this project is ever picked back up, Step 3's `update-kubeconfig` reminder and Step 4/5's `force_destroy`-driven re-upload step are the two things most likely to trip up a fresh restart — worth rereading those two sections first rather than starting from memory.

@@ -6,7 +6,7 @@ Containerized inference service for a ViT-B16 skin lesion classifier — deploye
 
 This repository takes a trained ViT-B16 skin lesion classifier — originally trained and evaluated in [skin-cancer-classification](../skin-cancer-classification) — and deploys it as a real, containerized inference service on Kubernetes. The model itself isn't the point of this repo; the infrastructure is. This is a hands-on build covering Docker, Kubernetes (Amazon EKS), Terraform, and the AWS networking/IAM decisions that come with running a real workload in private subnets.
 
-Two independent classifiers exist in the source project — melanoma-vs-others and keratosis-vs-others. This repo currently deploys **melanoma only**, built as a complete, working vertical slice end to end before repeating the same pattern for keratosis.
+The source project trains two independent classifiers — melanoma-vs-others and keratosis-vs-others. This repo deploys **melanoma only**, as a deliberate, final scope decision, not an in-progress step. The melanoma build proves the full pattern end to end — containerization, EKS, Terraform, IRSA, least-privilege IAM, S3 storage; a second service would largely repeat already-proven steps rather than add new learning, so it was intentionally left unbuilt.
 
 ## Architecture
 
@@ -20,7 +20,7 @@ Two independent classifiers exist in the source project — melanoma-vs-others a
 | Container registry | Amazon ECR, immutable image tags |
 | Network egress | Single NAT Gateway + free S3 Gateway Endpoint — see [ADR 0001](docs/adr/0001-network-egress-strategy.md) for the full reasoning |
 
-The weights bucket is shared across both models by S3 key prefix (`melanoma/`, `keratosis/`); each model has its own IAM role, scoped by trust-policy condition to its own ServiceAccount, and by permissions policy to its own prefix. A compromised melanoma pod cannot read keratosis's weights, or vice versa.
+The weights bucket and IAM role are scoped by S3 key prefix (`melanoma/`) rather than granted broad bucket access — a deliberate least-privilege choice made independent of whether a second model ever exists, not a feature built in anticipation of one.
 
 ## Repository structure
 
@@ -37,6 +37,8 @@ eks-vit-inference/
 │       └── 0001-network-egress-strategy.md
 ├── k8s/
 │   ├── namespace.yaml
+│   ├── vit-melanoma-deployment.yaml
+│   ├── vit-melanoma-service.yaml
 │   ├── templates/
 │   │   └── serviceaccount-melanoma.yaml.tpl   # source of truth, no hardcoded ARN
 │   └── generated/              # produced by `terraform apply`, gitignored
@@ -49,13 +51,14 @@ eks-vit-inference/
 │   ├── s3.tf                   # weights bucket (versioned, encrypted, private)
 │   ├── ecr.tf                  # container image repository
 │   ├── iam-irsa.tf             # melanoma's scoped IAM role + trust policy
-│   └── k8s-templates.tf        # renders the ServiceAccount YAML with the real IRSA ARN
+│   ├── k8s-templates.tf        # renders the ServiceAccount YAML with the real IRSA ARN
+│   └── outputs.tf              # account_id, ecr_melanoma_url, weights_bucket
 ├── local-weights/               # local checkpoint copy for testing, gitignored
 ├── DEPLOYMENT.md
 └── README.md
 ```
 
-## Status
+## Status — project concluded
 
 | Step | What it covers | Status |
 |---|---|---|
@@ -64,16 +67,22 @@ eks-vit-inference/
 | 2 | AWS foundations — VPC, remote state, NAT, free S3 endpoint | Done |
 | 3 | EKS cluster, node group, OIDC provider for IRSA | Done |
 | 4 | S3 + IRSA wiring, proven end-to-end from a real pod | Done |
-| 5 | Kubernetes Deployment/Service, port-forward test | Done |
-| 6 | ALB Ingress, external reachability | Not started |
-| 7 | Horizontal Pod Autoscaler | Not started |
-| 8 | CI/CD (GitHub Actions → ECR) | Not started |
-| 9 | Observability (CloudWatch Container Insights) | Not started |
-| — | Keratosis service (repeats this same pattern) | Deferred until melanoma is fully live |
+| 5 | Kubernetes Deployment/Service, port-forward test | Done — final milestone |
+| 6 | ALB Ingress, external reachability | Out of scope |
+| 7 | Horizontal Pod Autoscaler | Out of scope |
+| 8 | CI/CD (GitHub Actions → ECR) | Out of scope |
+| 9 | Observability (CloudWatch Container Insights) | Out of scope |
+| — | Keratosis service | Out of scope — not built, by design |
 
 IRSA verification (Step 4) was proven with a disposable test pod: `aws sts get-caller-identity` confirmed the pod assumed the melanoma role (not the node's own identity); reading `melanoma/*` succeeded; listing the bucket root correctly failed with `AccessDenied`, proving the prefix-scoped permissions boundary actually holds.
 
-Step 5 closed with a full end-to-end prediction from a real pod in EKS — `{"probability":0.5621392726898193,"label":0}`, bit-for-bit identical to the first local prediction from Step 1, confirming nothing in the container/EKS/IRSA chain introduced drift from the model's actual behavior.
+Step 5 closed with a full end-to-end prediction from a real pod in EKS — `{"probability":0.5621392726898193,"label":0}`, bit-for-bit identical to the first local prediction from Step 1, confirming nothing in the container/EKS/IRSA chain introduced drift from the model's actual behavior. This was the project's final milestone.
+
+## Project conclusion
+
+This project set out to containerize and deploy a trained ViT-B16 skin lesion classifier on Kubernetes, provisioned entirely through Terraform, with secure and least-privilege access to model weights. That goal was met and verified: a raw image, sent to a pod running in Amazon EKS, returns a real prediction — with zero static AWS credentials anywhere in the system, a scoped IAM boundary proven to actually hold (not just configured), and infrastructure that tears down and rebuilds cleanly from code alone.
+
+Everything past this point — external ALB access, autoscaling, CI/CD, observability, and a second model — is real, well-understood follow-on work, not something left unfinished by oversight. It's out of scope by deliberate choice: the melanoma build already exercises every mechanism (IRSA, least-privilege IAM, Terraform module usage vs. hand-written resources, container-to-Kubernetes networking) this project was meant to prove out. Should any of Steps 6–9 or a second model become worth doing later, `docs/adr/0001-network-egress-strategy.md` and this README's architecture notes are written to still be accurate starting points.
 
 ## Prerequisites
 
@@ -85,7 +94,7 @@ Step 5 closed with a full end-to-end prediction from a real pod in EKS — `{"pr
 
 ## Running this
 
-See `DEPLOYMENT.md` for the full ordered runbook. Rough shape: `terraform apply` in `terraform/` (provisions everything, including rendering the ServiceAccount YAML with the real IRSA role ARN), `aws eks update-kubeconfig`, `kubectl apply` the namespace and generated ServiceAccount, upload the checkpoint to S3, then apply the Deployment/Service manifests once Step 5 is complete.
+See `DEPLOYMENT.md` for the full ordered runbook, ending at the actual final state of this project. Rough shape: `terraform apply` in `terraform/` (provisions everything, including rendering the ServiceAccount YAML with the real IRSA role ARN), `aws eks update-kubeconfig`, `kubectl apply` the namespace and generated ServiceAccount, upload the checkpoint to S3, then apply the Deployment/Service manifests and test with `kubectl port-forward`.
 
 ## Cost
 
