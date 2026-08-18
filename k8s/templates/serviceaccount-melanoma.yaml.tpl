@@ -1,4 +1,4 @@
-#This file is going to create service account for the melanoma model
+#This file is going to create Service Account for the melanoma model
 apiVersion: v1
 kind: ServiceAccount
 metadata:

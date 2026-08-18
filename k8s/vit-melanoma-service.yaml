@@ -1,14 +1,18 @@
-# Create a service to expose the deployment
+# ClusterIP Service for the melanoma Deployment.
+# Created to give the melanoma pods one stable internal address, since
+# pod IPs change every time a pod is replaced.
+# Does: routes traffic to whichever melanoma pods are currently healthy.
+# Used directly by `kubectl port-forward` for local testing now, and
+# will be the target the ALB Ingress forwards to once Step 6 is built.
 apiVersion: v1
 kind: Service
 metadata:
-  name: vit-melanoma-service
+  name: vit-melanoma-svc
   namespace: vit-models
 spec:
-  type: LoadBalancer
-  ports:
-    - port: 8080
-      targetPort: 8080
-      protocol: TCP
+  type: ClusterIP
   selector:
     app: vit-melanoma
+  ports:
+    - port: 80
+      targetPort: 8080

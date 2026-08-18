@@ -126,30 +126,59 @@ exit
 kubectl delete pod irsa-test -n vit-models
 ```
 
-## Step 5 — Kubernetes workload objects (not yet executed — plan below)
+## Step 5 — Kubernetes workload objects — DONE, verified end-to-end
 
-Push the real image, using an explicit version tag, not `latest` (the ECR repo is `IMMUTABLE`, so re-pushing the same tag will fail on purpose):
+`terraform/outputs.tf` was added at this point — `account_id`, `ecr_melanoma_url`, `weights_bucket` — so none of the values below need retyping from memory:
 ```
-aws ecr get-login-password --region eu-west-2 | docker login --username AWS --password-stdin <ACCOUNT_ID>.dkr.ecr.eu-west-2.amazonaws.com
-docker build -t <ECR_MELANOMA_URL>:v1 containers/vit-melanoma
+terraform apply
+terraform output account_id
+terraform output ecr_melanoma_url
+terraform output weights_bucket
+```
+
+**ECR login — do not use `--password-stdin` on PowerShell.** Piping through PowerShell's `|` appends a trailing newline to the token before `docker login` reads it, corrupting the auth request into a `400 Bad Request` (not a credentials error — the request itself is malformed). Capture the token into a variable instead, and run each command separately rather than pasting them together (a merged paste with no line break between commands caused the token to be swallowed as garbage arguments to `aws` in one run of this):
+```
+$token = aws ecr get-login-password --region eu-west-2
+```
+*(press Enter, confirm it returns before continuing)*
+```
+docker login --username AWS --password $token <ACCOUNT_ID>.dkr.ecr.eu-west-2.amazonaws.com
+```
+The `--password` CLI warning that follows is expected and fine here — this token expires in 12 hours and grants nothing beyond this one registry, unlike a real reusable credential.
+
+If Docker Desktop's engine isn't responding (`failed to connect to the docker API at npipe://...`), it needs restarting — this happened mid-build once; see the note in Step 1 for the recovery steps, same fix applies here.
+
+Build and push with an explicit version tag, not `latest` (the repo is `IMMUTABLE`, so re-pushing `v1` with different content fails on purpose):
+```
+docker build -t <ECR_MELANOMA_URL>:v1 ../containers/vit-melanoma
 docker push <ECR_MELANOMA_URL>:v1
 ```
-
-Write `k8s/vit-melanoma-deployment.yaml` and `k8s/vit-melanoma-service.yaml`, with the init container pulling `melanoma/melanoma-fold5.pt` and the real `<ECR_MELANOMA_URL>:v1` image — no placeholders left in either file.
-
+Confirm it actually landed, not just a clean exit code:
 ```
-kubectl apply -f k8s/vit-melanoma-deployment.yaml
-kubectl apply -f k8s/vit-melanoma-service.yaml
+aws ecr describe-images --repository-name vit-melanoma --region eu-west-2
+```
+
+Upload the checkpoint — required every session, since `force_destroy` wipes the bucket on every teardown:
+```
+aws s3 cp local-weights/melanoma/melanoma-fold5.pt s3://<WEIGHTS_BUCKET>/melanoma/melanoma-fold5.pt
+```
+
+`k8s/vit-melanoma-deployment.yaml` and `k8s/vit-melanoma-service.yaml` — static YAML with real values filled in by hand (bucket name and ECR URL are stable enough not to warrant templating; see the deployment discussion in this repo's chat history for the reasoning). Apply both:
+```
+kubectl apply -f ../k8s/vit-melanoma-deployment.yaml
+kubectl apply -f ../k8s/vit-melanoma-service.yaml
 kubectl get pods -n vit-models -w
 ```
+Both replicas reached `1/1 Ready` within ~20 seconds — init container fetched the checkpoint via IRSA, main container passed its `/health` readiness check.
 
-Prove it end-to-end without waiting for Step 6's ALB:
+**Proof, without waiting for Step 6's ALB:**
 ```
 kubectl port-forward -n vit-models svc/vit-melanoma-svc 8080:80
 ```
 ```
 curl.exe -X POST -F "file=@test-images/test.jpg" http://localhost:8080/predict
 ```
+Result: `{"probability":0.5621392726898193,"label":0}` — bit-for-bit identical to the first local prediction from Step 1, confirming the checkpoint fetched via IRSA is byte-identical to the local copy and nothing in the container/EKS/IRSA chain introduced drift.
 
 ## Steps 6–9 (not started)
 

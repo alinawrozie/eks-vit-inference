@@ -64,7 +64,7 @@ eks-vit-inference/
 | 2 | AWS foundations — VPC, remote state, NAT, free S3 endpoint | Done |
 | 3 | EKS cluster, node group, OIDC provider for IRSA | Done |
 | 4 | S3 + IRSA wiring, proven end-to-end from a real pod | Done |
-| 5 | Kubernetes Deployment/Service, port-forward test | In progress |
+| 5 | Kubernetes Deployment/Service, port-forward test | Done |
 | 6 | ALB Ingress, external reachability | Not started |
 | 7 | Horizontal Pod Autoscaler | Not started |
 | 8 | CI/CD (GitHub Actions → ECR) | Not started |
@@ -72,6 +72,8 @@ eks-vit-inference/
 | — | Keratosis service (repeats this same pattern) | Deferred until melanoma is fully live |
 
 IRSA verification (Step 4) was proven with a disposable test pod: `aws sts get-caller-identity` confirmed the pod assumed the melanoma role (not the node's own identity); reading `melanoma/*` succeeded; listing the bucket root correctly failed with `AccessDenied`, proving the prefix-scoped permissions boundary actually holds.
+
+Step 5 closed with a full end-to-end prediction from a real pod in EKS — `{"probability":0.5621392726898193,"label":0}`, bit-for-bit identical to the first local prediction from Step 1, confirming nothing in the container/EKS/IRSA chain introduced drift from the model's actual behavior.
 
 ## Prerequisites
 

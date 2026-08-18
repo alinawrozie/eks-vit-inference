@@ -1,2 +1,71 @@
-# Deploy the model to EKS
+# Deployment for the melanoma ViT-B16 inference service.
+# Created to define what should be running: how many replicas, which
+# ServiceAccount to authenticate as (IRSA), and how to fetch model
+# weights from S3 before the app starts.
+# Does: runs an init container that pulls the checkpoint from S3, then
+# runs the FastAPI inference app, restarting pods automatically if they
+# crash and gating traffic on the /health readiness check.
 
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vit-melanoma
+  namespace: vit-models
+  labels:
+    app: vit-melanoma
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: vit-melanoma
+  template:
+    metadata:
+      labels:
+        app: vit-melanoma
+    spec:
+      serviceAccountName: vit-melanoma-sa
+      initContainers:
+        - name: fetch-weights
+          image: amazon/aws-cli:2.15.0
+          command:
+            - sh
+            - -c
+            - aws s3 cp s3://eks-vit-inference-weights-291460345355/melanoma/melanoma-fold5.pt /weights/melanoma-fold5.pt
+          volumeMounts:
+            - name: model-weights
+              mountPath: /weights
+      containers:
+        - name: vit-melanoma
+          image: 291460345355.dkr.ecr.eu-west-2.amazonaws.com/vit-melanoma:v1
+          ports:
+            - containerPort: 8080
+          env:
+            - name: CHECKPOINT_PATH
+              value: /weights/melanoma-fold5.pt
+            - name: THRESHOLD
+              value: "0.75"
+          volumeMounts:
+            - name: model-weights
+              mountPath: /weights
+          resources:
+            requests:
+              cpu: "750m"
+              memory: "1.5Gi"
+            limits:
+              cpu: "1"
+              memory: "2Gi"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 20
+      volumes:
+        - name: model-weights
+          emptyDir: {}
