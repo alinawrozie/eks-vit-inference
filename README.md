@@ -1,6 +1,6 @@
 # eks-vit-inference
 
-Containerized inference service for a ViT-B16 skin lesion classifier, deployed on Amazon EKS, provisioned with Terraform, model weights served securely from S3 via IRSA.
+Containerized inference service for a ViT-B16 skin lesion classifier, deployed on Amazon EKS, provisioned with Terraform, model weights served securely from S3 via IAM (IRSA).
 
 ## What this is
 
