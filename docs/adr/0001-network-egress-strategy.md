@@ -40,7 +40,7 @@ The Interface Endpoint approach is the more architecturally isolated option: pri
 
 None of those conditions apply here. This is a self-funded, single-operator learning project with no other tenant and no realistic adversary incentive beyond what IAM and security groups already constrain. The endpoint approach costs roughly $30–50/month more than NAT for a security property this project's threat model does not currently need — spending money to eliminate a risk that isn't meaningfully present.
 
-The S3 Gateway endpoint is taken regardless of which option is chosen, since it is free and strictly removes S3 traffic from the NAT path at no cost.
+The S3 Gateway endpoint is taken regardless of which option is chosen, since it is free and strictly removes S3 traffic from the NAT path at no cost. Against the initial plan, which sent S3 traffic through NAT, it removes NAT's per-GB data-processing charge ($0.048/GB in eu-west-2) from every S3 transfer: only cents a month at this project's volume (a model checkpoint of a few hundred MB per pod start), but about $49 per TB for a data-heavy workload.
 
 ## Consequences
 
